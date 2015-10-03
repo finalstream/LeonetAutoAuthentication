@@ -1,0 +1,1 @@
+LeonetAutoAuthentication.exe /regist

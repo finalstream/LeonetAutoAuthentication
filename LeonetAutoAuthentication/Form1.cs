@@ -40,7 +40,7 @@ namespace LeonetAutoAuthentication
             Properties.Settings.Default.Password = EncryptString(txtPassword.Text, pw);
             Properties.Settings.Default.Save();
 
-            Configuration config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.PerUserRoamingAndLocal);
+            //Configuration config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.PerUserRoamingAndLocal);
             //CreateShortCut("user.config.lnk",config.FilePath,"");
 
             Application.Exit();
@@ -51,7 +51,7 @@ namespace LeonetAutoAuthentication
         private void showSetting()
         {
             this.Visible = true;
-            this.Size = new Size(241, 85);
+            //this.Size = new Size(241, 85);
         }
 
         private void 設定ToolStripMenuItem_Click(object sender, EventArgs e)
@@ -84,11 +84,12 @@ namespace LeonetAutoAuthentication
                     {
                         foreach (GatewayIPAddressInformation address in addresses)
                         {
-                            defaultGatwayAddress = address.Address.ToString();
+                            var gatewayAddress = address.Address.ToString();
+                            if (!Equals(IPAddress.Any, address.Address)) defaultGatwayAddress = gatewayAddress.ToString();
                             break;
                         }
                     }
-                    break;
+                    if (!string.IsNullOrEmpty(defaultGatwayAddress)) break;
                 }
             }
 

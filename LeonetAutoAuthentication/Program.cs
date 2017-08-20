@@ -2,12 +2,15 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Security.Principal;
 using System.Windows.Forms;
+using Microsoft.Win32.TaskScheduler;
 
 namespace LeonetAutoAuthentication
 {
     static class Program
     {
+        public const string WindowsLAATaskName = "Leonet Auto Authentication Startup";
         public static bool isReset = false;
         /// <summary>
         /// アプリケーションのメイン エントリ ポイントです。
@@ -15,6 +18,10 @@ namespace LeonetAutoAuthentication
         [STAThread]
         static void Main(string[] args)
         {
+
+            //UnhandledExceptionイベントハンドラを追加する
+            System.AppDomain.CurrentDomain.UnhandledException +=
+                new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
             if (args.Length > 0)
             {
@@ -27,22 +34,52 @@ namespace LeonetAutoAuthentication
 
                 if ("/regist".Equals(args[0]))
                 {
-                    CreateShortCut(
-                        leonetlink,
-                        Application.ExecutablePath,
-                        "");
-                    MessageBox.Show("スタートアップに登録しました。");
+                    // Check to make sure account privileges allow task deletion
+                    if (!IsInAdminRole())
+                    {
+                        MessageBox.Show("権限が不足しております。管理者として実行してください。");
+                        Environment.Exit(0);
+                    }
+
+                    var result = CreateWindowsTask(Application.ExecutablePath);
+
+                    if (result)
+                    {
+                        MessageBox.Show("スタートアップに登録しました。");
+                    }
+
                     Environment.Exit(0);
                 }
 
                 if ("/unregist".Equals(args[0]))
                 {
+                    // 旧バージョンの可能性があるのでショートカット削除
                     if (File.Exists(leonetlink))
                     {
                         File.Delete(leonetlink);
-                        MessageBox.Show("スタートアップを解除しました。");
-                        
+                        MessageBox.Show("旧スタートアップを解除しました。"); 
                     }
+
+                    // タスクスケジューラ削除
+                    // Check to make sure account privileges allow task deletion
+                    if (!IsInAdminRole())
+                    {
+                        MessageBox.Show("権限が不足しております。管理者として実行してください。");
+                        Environment.Exit(0);
+                    }
+                    using (var ts = new TaskService())
+                    {
+                        var t = ts.GetTask(WindowsLAATaskName);
+
+                        if (t != null)
+                        {
+                            
+                            // Remove the task we just created
+                            ts.RootFolder.DeleteTask(WindowsLAATaskName);
+                            MessageBox.Show("スタートアップを解除しました。");
+                        }
+                    }
+
                     Environment.Exit(0);
                 }
             }
@@ -52,32 +89,60 @@ namespace LeonetAutoAuthentication
             Application.Run(new Form1());
         }
 
-        
-        /// <summary>
-        /// ショートカットの作成
-        /// </summary>
-        /// <remarks>WSHを使用して、ショートカット(lnkファイル)を作成します。(遅延バインディング)</remarks>
-        /// <param name="path">出力先のファイル名(*.lnk)</param>
-        /// <param name="targetPath">対象のアセンブリ(*.exe)</param>
-        /// <param name="description">説明</param>
-        private static void CreateShortCut(String path, String targetPath, String description)
+        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            //using System.Reflection;
-
-            // WSHオブジェクトを作成し、CreateShortcutメソッドを実行する
-            Type shellType = Type.GetTypeFromProgID("WScript.Shell");
-            object shell = Activator.CreateInstance(shellType);
-            object shortCut = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { path });
-
-            Type shortcutType = shell.GetType();
-            // TargetPathプロパティをセットする
-            shortcutType.InvokeMember("TargetPath", BindingFlags.SetProperty, null, shortCut, new object[] { targetPath });
-            // Descriptionプロパティをセットする
-            shortcutType.InvokeMember("Description", BindingFlags.SetProperty, null, shortCut, new object[] { description });
-            // Saveメソッドを実行する
-            shortcutType.InvokeMember("Save", BindingFlags.InvokeMethod, null, shortCut, null);
-
+            try
+            {
+                Exception ex = (Exception)e.ExceptionObject;
+                //エラーメッセージを表示する
+                MessageBox.Show(ex.ToString());
+            }
+            finally
+            {
+                //アプリケーションを終了する
+                Environment.Exit(1);
+            }
         }
+
+        /// <summary>
+        /// 管理者ロールを保持しているか確認する
+        /// </summary>
+        /// <returns></returns>
+        private static bool IsInAdminRole()
+        {
+            var identity = WindowsIdentity.GetCurrent();
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+
+        private static bool CreateWindowsTask(string executablePath)
+        {
+            using (var ts = new TaskService())
+            {
+                var t = ts.GetTask(WindowsLAATaskName);
+
+                if (t != null) return false; // タスクがすでに存在する
+
+                // Create a new task definition and assign properties
+                TaskDefinition td = ts.NewTask();
+                td.RegistrationInfo.Description = "Windows起動時にLeonetに接続します。";
+                td.Principal.LogonType = TaskLogonType.S4U;
+
+                var bt = new BootTrigger();
+                bt.Delay = TimeSpan.FromSeconds(10);
+                td.Triggers.Add(bt);
+
+                td.Actions.Add(new ExecAction(executablePath));
+
+                td.Settings.DisallowStartIfOnBatteries = false;
+
+                // Register the task in the root folder
+                ts.RootFolder.RegisterTaskDefinition(WindowsLAATaskName, td);
+
+                return true;
+            }
+        }
+
         
     }
 }

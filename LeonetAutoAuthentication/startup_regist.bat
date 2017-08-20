@@ -1,1 +1,1 @@
-LeonetAutoAuthentication.exe /regist
+%~dp0\LeonetAutoAuthentication.exe /regist

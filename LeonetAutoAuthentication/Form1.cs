@@ -201,6 +201,7 @@ namespace LeonetAutoAuthentication
 
         private void Form1_Load(object sender, EventArgs e)
         {
+            Properties.Settings.Default.Upgrade();
             txtUserId.Text = Properties.Settings.Default.UserId;
             txtPassword.Text = DecryptString(Properties.Settings.Default.Password, pw);
             

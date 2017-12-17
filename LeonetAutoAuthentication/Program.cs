@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Security.Principal;
 using System.Windows.Forms;
 using Microsoft.Win32.TaskScheduler;
+using Newtonsoft.Json;
 
 namespace LeonetAutoAuthentication
 {
@@ -12,6 +13,11 @@ namespace LeonetAutoAuthentication
     {
         public const string WindowsLAATaskName = "Leonet Auto Authentication Startup";
         public static bool isReset = false;
+
+        public static AppConfig AppConfig;
+
+        public static string AppConfigPath;
+
         /// <summary>
         /// アプリケーションのメイン エントリ ポイントです。
         /// </summary>
@@ -22,6 +28,27 @@ namespace LeonetAutoAuthentication
             //UnhandledExceptionイベントハンドラを追加する
             System.AppDomain.CurrentDomain.UnhandledException +=
                 new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
+
+            AppConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appConfig.json");
+
+            AppConfig appConfig;
+
+            if (!File.Exists(Program.AppConfigPath))
+            {
+                // 旧バージョンからアップグレード（configをjsonにする）
+                Properties.Settings.Default.Upgrade();
+                Program.AppConfig = new AppConfig();
+                appConfig = Program.AppConfig;
+                appConfig.ConnectUrl = Properties.Settings.Default.RequestURL;
+                appConfig.UserId = Properties.Settings.Default.UserId;
+                appConfig.Password = Properties.Settings.Default.Password;
+            }
+            else
+            {
+                // jsonから設定をロード
+                appConfig = JsonConvert.DeserializeObject<AppConfig>(File.ReadAllText(Program.AppConfigPath));
+                Program.AppConfig = appConfig;
+            }
 
             if (args.Length > 0)
             {
@@ -126,10 +153,12 @@ namespace LeonetAutoAuthentication
                 // Create a new task definition and assign properties
                 TaskDefinition td = ts.NewTask();
                 td.RegistrationInfo.Description = "Windows起動時にLeonetに接続します。";
-                td.Principal.LogonType = TaskLogonType.S4U;
+                td.Principal.UserId = "SYSTEM";
+ 
+                
 
                 var bt = new BootTrigger();
-                bt.Delay = TimeSpan.FromSeconds(10);
+                bt.Delay = TimeSpan.FromMilliseconds(AppConfig.StartupDelayTime);
                 td.Triggers.Add(bt);
 
                 td.Actions.Add(new ExecAction(executablePath));

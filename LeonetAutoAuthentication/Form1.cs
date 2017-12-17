@@ -11,6 +11,7 @@ using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
+using Newtonsoft.Json;
 
 namespace LeonetAutoAuthentication
 {
@@ -36,9 +37,16 @@ namespace LeonetAutoAuthentication
 
         private void exit()
         {
-            Properties.Settings.Default.UserId = txtUserId.Text;
-            Properties.Settings.Default.Password = EncryptString(txtPassword.Text, pw);
-            Properties.Settings.Default.Save();
+            //Properties.Settings.Default.UserId = txtUserId.Text;
+            //Properties.Settings.Default.Password = EncryptString(txtPassword.Text, pw);
+            //Properties.Settings.Default.Save();
+
+            var appConfig = Program.AppConfig;
+
+            appConfig.UserId = txtUserId.Text;
+            appConfig.Password = EncryptString(txtPassword.Text, pw);
+            File.WriteAllText(Program.AppConfigPath, JsonConvert.SerializeObject(appConfig));
+
 
             //Configuration config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.PerUserRoamingAndLocal);
             //CreateShortCut("user.config.lnk",config.FilePath,"");
@@ -67,6 +75,7 @@ namespace LeonetAutoAuthentication
 
         private void execAuth()
         {
+            var appConfig = Program.AppConfig;
 
             
             string defaultGatwayAddress = "";
@@ -101,14 +110,14 @@ namespace LeonetAutoAuthentication
 
             //HttpWebRequestの作成
             System.Net.HttpWebRequest webreq = (System.Net.HttpWebRequest)
-                System.Net.WebRequest.Create(Properties.Settings.Default.RequestURL.Replace("#GATEWAY#",defaultGatwayAddress));
+                System.Net.WebRequest.Create(appConfig.ConnectUrl.Replace("#GATEWAY#",defaultGatwayAddress));
 
             //認証の設定
             webreq.Credentials =
                 new System.Net.NetworkCredential(txtUserId.Text, txtPassword.Text);
 
             // timeout 10sec
-            webreq.Timeout = Properties.Settings.Default.WaitMillisecond;
+            webreq.Timeout = appConfig.ConnectionTimeout;
 
             System.Net.HttpWebResponse webres = null;
             notifyIcon.BalloonTipTitle = "LeonetAutoAuthentication";
@@ -124,7 +133,7 @@ namespace LeonetAutoAuthentication
                 {
                     notifyIcon.BalloonTipIcon = ToolTipIcon.Info;
                     notifyIcon.BalloonTipText = "Success";
-                    notifyIcon.ShowBalloonTip(Properties.Settings.Default.ViewMillisecond);
+                    notifyIcon.ShowBalloonTip(appConfig.ViewMillisecond);
                 }
                 else
                 {
@@ -169,7 +178,7 @@ namespace LeonetAutoAuthentication
                 {
                     notifyIcon.BalloonTipText += "\n" + ex.InnerException.Message;
                 }
-                notifyIcon.ShowBalloonTip(Properties.Settings.Default.ViewMillisecond);
+                notifyIcon.ShowBalloonTip(appConfig.ViewMillisecond);
             }
             
 
@@ -178,7 +187,7 @@ namespace LeonetAutoAuthentication
 
                 Stopwatch sw = new Stopwatch();
                 sw.Start();
-                while (sw.ElapsedMilliseconds < Properties.Settings.Default.ViewMillisecond)
+                while (sw.ElapsedMilliseconds < appConfig.ViewMillisecond)
                 {
                     // 何らかの処理
                     System.Threading.Thread.Sleep(10);
@@ -201,9 +210,11 @@ namespace LeonetAutoAuthentication
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            Properties.Settings.Default.Upgrade();
-            txtUserId.Text = Properties.Settings.Default.UserId;
-            txtPassword.Text = DecryptString(Properties.Settings.Default.Password, pw);
+            var appConfig = Program.AppConfig;
+
+            
+            txtUserId.Text = appConfig.UserId;
+            txtPassword.Text = DecryptString(appConfig.Password, pw);
             
             if (!Program.isReset && !String.IsNullOrEmpty(txtUserId.Text) && !String.IsNullOrEmpty(txtPassword.Text))
             {

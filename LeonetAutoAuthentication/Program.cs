@@ -154,7 +154,7 @@ namespace LeonetAutoAuthentication
                 TaskDefinition td = ts.NewTask();
                 td.RegistrationInfo.Description = "Windows起動時にLeonetに接続します。";
                 td.Principal.UserId = "SYSTEM";
- 
+                td.Principal.RunLevel = TaskRunLevel.Highest;
                 
 
                 var bt = new BootTrigger();

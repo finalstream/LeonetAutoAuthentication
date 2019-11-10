@@ -7,9 +7,11 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 
@@ -18,7 +20,6 @@ namespace LeonetAutoAuthentication
     public partial class Form1 : Form
     {
         private string pw = "FINALSTREAM.NET";
-        private int errcnt;
 
         public Form1()
         {
@@ -67,13 +68,13 @@ namespace LeonetAutoAuthentication
             showSetting();
         }
 
-        private void button1_Click(object sender, EventArgs e)
+        private async void button1_Click(object sender, EventArgs e)
         {
-            errcnt = 0;
-            execAuth();
+            await execAuthAsync();
         }
 
-        private void execAuth()
+    
+        private async System.Threading.Tasks.Task execAuthAsync()
         {
             var appConfig = Program.AppConfig;
 
@@ -108,28 +109,15 @@ namespace LeonetAutoAuthentication
                 exit();
             }
 
-            //HttpWebRequestの作成
-            System.Net.HttpWebRequest webreq = (System.Net.HttpWebRequest)
-                System.Net.WebRequest.Create(appConfig.ConnectUrl.Replace("#GATEWAY#",defaultGatwayAddress));
 
-            //認証の設定
-            webreq.Credentials =
-                new System.Net.NetworkCredential(txtUserId.Text, txtPassword.Text);
-
-            // timeout 10sec
-            webreq.Timeout = appConfig.ConnectionTimeout;
-
-            System.Net.HttpWebResponse webres = null;
             notifyIcon.BalloonTipTitle = "LeonetAutoAuthentication";
-            try
-            {
-                //HttpWebResponseの取得
-                webres =
-                    (System.Net.HttpWebResponse) webreq.GetResponse();
 
-                //受信して表示
-                
-                if (webres.StatusCode == HttpStatusCode.OK)
+            var credentials = new NetworkCredential(txtUserId.Text, txtPassword.Text);
+            using (var client = new HttpClient(new RetryHandler(new HttpClientHandler() { Credentials = credentials })))
+            {
+                client.Timeout = TimeSpan.FromMilliseconds(appConfig.ConnectionTimeout);
+                var result = await client.GetAsync(appConfig.ConnectUrl.Replace("#GATEWAY#", defaultGatwayAddress));
+                if (result.IsSuccessStatusCode)
                 {
                     notifyIcon.BalloonTipIcon = ToolTipIcon.Info;
                     notifyIcon.BalloonTipText = "Success";
@@ -138,65 +126,26 @@ namespace LeonetAutoAuthentication
                 else
                 {
                     notifyIcon.BalloonTipIcon = ToolTipIcon.Warning;
-                    notifyIcon.BalloonTipText = webres.StatusDescription;
+                    notifyIcon.BalloonTipText = result.ReasonPhrase;
+                }
+
+                if (result.IsSuccessStatusCode)
+                {
+
+                    Stopwatch sw = new Stopwatch();
+                    sw.Start();
+                    while (sw.ElapsedMilliseconds < appConfig.ViewMillisecond)
+                    {
+                        // 何らかの処理
+                        await Task.Delay(10);
+
+                        // メッセージ・キューにあるWindowsメッセージをすべて処理する
+                        Application.DoEvents();
+                    }
+                    exit();
                 }
             }
-            catch(Exception ex)
-            {
-                System.Threading.Thread.Sleep(3000);
-                errcnt++;
-                ProcessStartInfo psi =
-                        new ProcessStartInfo();
 
-                //ComSpecのパスを取得する
-                psi.FileName = System.Environment.GetEnvironmentVariable("ComSpec");
-
-                //出力を読み取れるようにする
-                psi.RedirectStandardInput = false;
-                psi.RedirectStandardOutput = true;
-                psi.UseShellExecute = false;
-                //ウィンドウを表示しないようにする
-                psi.CreateNoWindow = true;
-                //コマンドラインを指定（"/c"は実行後閉じるために必要）
-                psi.Arguments = @"/c ipconfig /renew";
-                //起動
-                System.Diagnostics.Process p = System.Diagnostics.Process.Start(psi);
-                //出力を読み取る
-                string results = p.StandardOutput.ReadToEnd();
-                //WaitForExitはReadToEndの後である必要がある
-                //(親プロセス、子プロセスでブロック防止のため)
-                p.WaitForExit();
-                
-                if (errcnt < 10)
-                {
-                    execAuth();
-                    return;
-                }
-                notifyIcon.BalloonTipIcon = ToolTipIcon.Error;
-                notifyIcon.BalloonTipText =  ex.Message;
-                if (ex.InnerException != null)
-                {
-                    notifyIcon.BalloonTipText += "\n" + ex.InnerException.Message;
-                }
-                notifyIcon.ShowBalloonTip(appConfig.ViewMillisecond);
-            }
-            
-
-            if (webres != null && webres.StatusCode == HttpStatusCode.OK)
-            {
-
-                Stopwatch sw = new Stopwatch();
-                sw.Start();
-                while (sw.ElapsedMilliseconds < appConfig.ViewMillisecond)
-                {
-                    // 何らかの処理
-                    System.Threading.Thread.Sleep(10);
-
-                    // メッセージ・キューにあるWindowsメッセージをすべて処理する
-                    Application.DoEvents();
-                }
-                exit();
-            }
         }
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
@@ -208,7 +157,7 @@ namespace LeonetAutoAuthentication
             }
         }
 
-        private void Form1_Load(object sender, EventArgs e)
+        private async void Form1_Load(object sender, EventArgs e)
         {
             var appConfig = Program.AppConfig;
 
@@ -221,7 +170,7 @@ namespace LeonetAutoAuthentication
                 // wait
                 //System.Threading.Thread.Sleep(Properties.Settings.Default.WaitMillisecond);
 
-                execAuth();
+                await execAuthAsync();
             }
         }
 

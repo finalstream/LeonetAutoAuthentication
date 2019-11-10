@@ -11,7 +11,7 @@ namespace LeonetAutoAuthentication
         public AppConfig()
         {
             ConnectUrl = "http://#GATEWAY#/login.cgi";
-            ConnectionTimeout = 30000;
+            ConnectionTimeout = 5000;
             ViewMillisecond = 3000;
             StartupDelayTime = 20000;
         }

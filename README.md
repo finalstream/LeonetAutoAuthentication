@@ -4,7 +4,6 @@ LEONETのLifeStickへの仕様変更がありましたが、ルータを使っ�
 
 2017/08　ver.1.2で動作していることを確認。  
 2016/04　ver.1.1.1で動作していることを確認。(※)
-
-※ver.1.1でも動作しますが、vmをインストールしている場合はver.1.1.1にあげないと動作しない場合があります。
+2019/11  ver.2.0でWindows10(1903)で動作確認済み
 
 ### [Download](https://github.com/finalstream/LeonetAutoAuthentication/releases/latest)
